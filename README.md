@@ -1,6 +1,6 @@
 # Signals Plugin Registry
  
-The plugin registry for the [Signals Rental Framework](https://github.com/signals-rental/framework) — a curated index of verified and community plugins. The Signals application reads this registry to power plugin discovery and installation.
+The plugin registry for the [Signals Rental Framework](https://github.com/signals-rental/framework-core) — a curated index of verified and community plugins. The Signals application reads this registry to power plugin discovery and installation.
  
 This repository holds **pointers and curation metadata only**. Plugin code lives in each plugin's own repository.
  
@@ -18,7 +18,7 @@ Listing a plugin here does not change its licence and implies no endorsement.
  
 ## Tiers
  
-- **verified** — reviewed by Signals; eligible for Signals Cloud.
+- **verified** — reviewed by Signals.
 - **community** — listed but not reviewed; self-hosted only, installed at the operator's own risk.
 ## Licence
  
