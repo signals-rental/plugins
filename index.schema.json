@@ -1,0 +1,320 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://docs.signals.rent/schemas/signals-plugin-registry-index.v1.json",
+    "title": "Signals plugin registry index",
+    "description": "Envelope for the generated index.json that the Signals framework and the registry web UI consume. CI builds it from every plugins/<vendor>/<package>.json entry, then enriches each one by resolving the highest SemVer git tag in the entry's source repository, reading signals.yaml at that tag and validating it against the framework manifest schema. Registry-authored fields are copied verbatim from the entry; the `latest` and `enrichment` fields are generated and must never be hand-edited.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "index_schema_version",
+        "generated_at",
+        "count",
+        "plugins"
+    ],
+    "properties": {
+        "index_schema_version": {
+            "description": "Version of this envelope format. Consumers should refuse an index whose version they do not understand.",
+            "const": 1
+        },
+        "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC 3339 timestamp of the build that produced this index."
+        },
+        "count": {
+            "type": "integer",
+            "description": "Number of items in `plugins`, including deprecated and yanked entries.",
+            "minimum": 0
+        },
+        "plugins": {
+            "type": "array",
+            "description": "Every registry entry, sorted by `package`. Yanked entries are retained deliberately so consumers holding a cached copy still see the status change.",
+            "items": {
+                "$ref": "#/$defs/indexedPlugin"
+            }
+        }
+    },
+    "$defs": {
+        "semver": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "indexedPlugin": {
+            "type": "object",
+            "description": "One registry entry as published: the author-maintained fields from its entry file, plus the generated release data.",
+            "additionalProperties": false,
+            "required": [
+                "package",
+                "source",
+                "description",
+                "tier",
+                "status"
+            ],
+            "properties": {
+                "package": {
+                    "type": "string",
+                    "description": "Composer package name in vendor/name form. Unique across the index and equal to the entry's file path segments.",
+                    "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$"
+                },
+                "source": {
+                    "type": "object",
+                    "description": "Git repository the plugin is installed from, copied from the entry.",
+                    "additionalProperties": false,
+                    "required": [
+                        "type",
+                        "url"
+                    ],
+                    "properties": {
+                        "type": {
+                            "enum": [
+                                "git"
+                            ]
+                        },
+                        "url": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "Public HTTPS clone URL."
+                        }
+                    }
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Registry-authored summary shown in listings.",
+                    "minLength": 1,
+                    "maxLength": 500
+                },
+                "tier": {
+                    "description": "Curation tier: `verified` (Signals reviewed the release named in `verification`) or `community` (unreviewed, self-hosted only, at the operator's own risk).",
+                    "enum": [
+                        "verified",
+                        "community"
+                    ]
+                },
+                "license": {
+                    "type": "string",
+                    "description": "SPDX licence identifier declared by the entry author.",
+                    "minLength": 1
+                },
+                "authors": {
+                    "type": "array",
+                    "description": "Attribution copied from the entry.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "name"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "email": {
+                                "type": "string",
+                                "format": "email"
+                            },
+                            "url": {
+                                "type": "string",
+                                "format": "uri"
+                            }
+                        }
+                    }
+                },
+                "homepage": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Optional documentation or product page."
+                },
+                "keywords": {
+                    "type": "array",
+                    "description": "Kebab-case tags for filtering in the registry UI.",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                    }
+                },
+                "status": {
+                    "description": "Lifecycle state. Always present in the index: the build materialises the entry's default of \"active\" when the entry omits it.",
+                    "enum": [
+                        "active",
+                        "deprecated",
+                        "yanked"
+                    ]
+                },
+                "status_reason": {
+                    "type": "string",
+                    "description": "Explanation shown with a deprecated or yanked badge.",
+                    "minLength": 1
+                },
+                "verification": {
+                    "type": "object",
+                    "description": "Present only on verified entries. Anchored to one reviewed release — `latest.version` may be ahead of `reviewed_version`, and a newer release is not automatically verified.",
+                    "additionalProperties": false,
+                    "required": [
+                        "reviewed_version",
+                        "reviewed_at"
+                    ],
+                    "properties": {
+                        "reviewed_version": {
+                            "$ref": "#/$defs/semver"
+                        },
+                        "reviewed_at": {
+                            "$ref": "#/$defs/date"
+                        }
+                    }
+                },
+                "added_at": {
+                    "$ref": "#/$defs/date",
+                    "description": "Date the entry was accepted into the registry."
+                },
+                "latest": {
+                    "description": "Generated release data read from signals.yaml at the highest SemVer tag of the source repository. Absent when enrichment has never succeeded for this package (see `enrichment`).",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "version",
+                        "name",
+                        "signals_version",
+                        "tag",
+                        "fetched_at"
+                    ],
+                    "properties": {
+                        "version": {
+                            "$ref": "#/$defs/semver",
+                            "description": "Manifest `version` at the resolved tag."
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Human-readable display name from the manifest — the registry has no name field of its own.",
+                            "minLength": 1
+                        },
+                        "signals_version": {
+                            "type": "string",
+                            "description": "Composer-style framework compatibility constraint from the manifest (e.g. \"^1.0\").",
+                            "minLength": 1
+                        },
+                        "icon": {
+                            "type": "string",
+                            "description": "Optional kebab-case icon name from the manifest.",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                        },
+                        "permissions": {
+                            "type": "array",
+                            "description": "Permission keys the plugin registers, surfaced so operators can see what it will be able to do before installing.",
+                            "items": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                            }
+                        },
+                        "network": {
+                            "type": "array",
+                            "description": "Outbound hostnames the plugin declares it talks to.",
+                            "items": {
+                                "type": "string",
+                                "minLength": 1
+                            }
+                        },
+                        "tag": {
+                            "type": "string",
+                            "description": "The git tag this data was read from, verbatim (so it may carry a leading \"v\"). This is the ref the framework clones to install the plugin.",
+                            "minLength": 1
+                        },
+                        "fetched_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "When this release data was read from the repository. On a stale entry this is the timestamp of the last successful read, not of this build."
+                        }
+                    }
+                },
+                "enrichment": {
+                    "description": "Health of the generated data. Absent when this build enriched the entry successfully. \"stale\" means enrichment failed and `latest` was carried forward from the previous index — the data is real but may be out of date. \"failed\" means enrichment failed with nothing to carry forward, so `latest` is absent and consumers have no installable version.",
+                    "enum": [
+                        "stale",
+                        "failed"
+                    ]
+                }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "enrichment": {
+                                "const": "failed"
+                            }
+                        },
+                        "required": [
+                            "enrichment"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "latest"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "enrichment": {
+                                "const": "stale"
+                            }
+                        },
+                        "required": [
+                            "enrichment"
+                        ]
+                    },
+                    "then": {
+                        "required": [
+                            "latest"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "not": {
+                            "required": [
+                                "enrichment"
+                            ]
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "latest"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "tier": {
+                                "const": "verified"
+                            }
+                        },
+                        "required": [
+                            "tier"
+                        ]
+                    },
+                    "then": {
+                        "required": [
+                            "verification"
+                        ]
+                    },
+                    "else": {
+                        "not": {
+                            "required": [
+                                "verification"
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

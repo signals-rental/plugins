@@ -1,0 +1,22 @@
+{
+    "name": "signals-plugin-registry",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Tooling for the Signals plugin registry: entry validation and index generation.",
+    "license": "MIT",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "validate": "node scripts/validate.mjs",
+        "check": "node scripts/check-entries.mjs",
+        "build": "node scripts/build-index.mjs"
+    },
+    "devDependencies": {
+        "ajv": "^8.17.1",
+        "ajv-formats": "^3.0.1",
+        "js-yaml": "^4.1.0",
+        "semver": "^7.6.3"
+    }
+}

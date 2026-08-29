@@ -1,0 +1,752 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://signals.rent/schemas/signals-plugin-manifest.v1.json",
+    "title": "Signals plugin manifest (signals.yaml)",
+    "description": "Public specification for the signals.yaml plugin manifest, version 1. This schema mirrors the framework's ManifestValidator; the framework additionally enforces cross-field rules a JSON Schema cannot express: permission keys must be prefixed with the Composer vendor segment of `package` (rule permissions.namespace), and every capability a plugin registers at runtime must be declared here (wiring \u2286 declaration). Workflow activation diagnostics use compatibility.host, compatibility.requires, compatibility.conflicts, and workflow_extensions.identity_collision. Workflow declaration diagnostics use workflow_handlers.malformed, workflow_handlers.identity, workflow_handlers.version, workflow_handlers.contract_version, workflow_handlers.class, workflow_handlers.capabilities, workflow_handlers.retry, workflow_handlers.outcomes, workflow_handlers.schema, workflow_conditions.context, workflow_conditions.contract_version, workflow_conditions.sanitized, workflow_conditions.side_effect_free, workflow_conditions.no_live_access, and workflow_extensions.identity_unique. Validate locally with `php artisan signals:plugin check {package}`.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "package",
+        "name",
+        "version",
+        "signals_version"
+    ],
+    "properties": {
+        "package": {
+            "type": "string",
+            "description": "Composer package name in vendor/name form. Rule: identity.package.format.",
+            "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$"
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable display name. Required identity field. Rule: identity.required."
+        },
+        "icon": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "Optional plugin identity icon: a kebab-case flux/heroicon name used in nav, dropdowns, and titles (e.g. bolt, puzzle-piece)."
+        },
+        "version": {
+            "type": "string",
+            "description": "Semantic version of the plugin. Rule: identity.version.semver.",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+        },
+        "signals_version": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Composer-style constraint for compatible framework versions (e.g. \"^1.0\", \">=1.2 <2\", \"1.2.x\", \"*\"). Rule: identity.signals_version.constraint.",
+            "$ref": "#/$defs/versionConstraint"
+        },
+        "requires": {
+            "type": "object",
+            "description": "Other Signals plugins this plugin depends on: package => version constraint. Rule: requires.constraint.",
+            "propertyNames": {
+                "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/versionConstraint"
+            }
+        },
+        "conflicts": {
+            "type": "object",
+            "description": "Plugins that cannot be installed alongside this one: package => version constraint. Rule: conflicts.constraint.",
+            "propertyNames": {
+                "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/versionConstraint"
+            }
+        },
+        "permissions": {
+            "type": "array",
+            "description": "Permission keys the plugin registers, in resource.action form. The framework additionally requires the key to start with the Composer vendor segment of `package` followed by a dot (e.g. acme/xero-sync declares acme.* keys). Rule: permissions.namespace.",
+            "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+            }
+        },
+        "data_access": {
+            "type": "array",
+            "description": "Entity/field/operation grants consumed by the guarded data facade (Signals::read/update). Rule: data_access.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "entity",
+                    "operations"
+                ],
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Entity key from the plugin entity map (e.g. accounts, rentals, invoices, catalogue_items)."
+                    },
+                    "fields": {
+                        "type": "array",
+                        "description": "Fields granted for every declared operation (rule data_access.fields). Use custom_fields for the whole custom-field map or custom_fields.{name} for a specific one.",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "read_fields": {
+                        "type": "array",
+                        "description": "When present, fully defines the readable field list (overrides fields for reads). Rule: data_access.read_fields.",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "write_fields": {
+                        "type": "array",
+                        "description": "When present, fully defines the writable field list (overrides fields for writes). Rule: data_access.write_fields.",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "operations": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "enum": [
+                                "read",
+                                "write",
+                                "delete"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "operations": {
+            "type": "array",
+            "description": "Named operations (registered action-class invocations) the plugin may call through Signals::operation(). Rule: operations.malformed.",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        },
+        "tools": {
+            "type": "array",
+            "description": "MCP/CLI tools the plugin exposes via PluginRegistrar::tool(). Names must be vendor-prefixed like permissions; the runtime bridge namespaces ids as plugin:{package}:{name}. Rule: tools.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name",
+                    "action"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+                        "description": "Vendor-prefixed tool name (e.g. acme.sync.run)."
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Human-readable tool title."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What the tool does; shown to MCP/CLI callers."
+                    },
+                    "action": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Fully-qualified invocable action class that runs the tool."
+                    },
+                    "permission": {
+                        "type": "string",
+                        "description": "Permission key gating invocation, in resource.action form under the vendor prefix."
+                    },
+                    "read_only": {
+                        "type": "boolean",
+                        "description": "Tool only reads data (no writes)."
+                    },
+                    "destructive": {
+                        "type": "boolean",
+                        "description": "Tool performs a destructive change; surfaced to callers as a warning."
+                    },
+                    "surfaces": {
+                        "type": "array",
+                        "description": "Surfaces the tool is exposed on (default both).",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "mcp",
+                                "cli"
+                            ]
+                        }
+                    },
+                    "args": {
+                        "type": "array",
+                        "description": "Declared tool arguments.",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "name"
+                            ],
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "description": "Argument name."
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "description": "Argument scalar type (default string)."
+                                },
+                                "required": {
+                                    "type": "boolean",
+                                    "description": "Whether the argument must be supplied."
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Argument help text."
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "datatables": {
+            "type": "array",
+            "description": "Plugin listing tables rendered through the shared core DataTable component. Rules: datatables.malformed (dotted vendor-prefixed key, non-empty permission), datatables.permission (declared plugin permission or registered core permission), datatables.key_unique (unique keys).",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "key"
+                ],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Globally unique, vendor-prefixed key referenced by page sections and slots. Rule: datatables.key_unique.",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                    },
+                    "permission": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Permission the registered definition must gate on. Must be a declared plugin permission or a registered core permission. When declared, PluginRegistrar::datatable() rejects a mismatching definition. Rule: datatables.permission."
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "tables": {
+            "type": "array",
+            "description": "Database tables the plugin's migrations may create. Must be plugin_-prefixed snake_case; enforced again at runtime by the migration table-diff guard. Rule: tables.prefix.",
+            "items": {
+                "type": "string",
+                "pattern": "^plugin_[a-z][a-z0-9_]*$"
+            }
+        },
+        "hooks": {
+            "type": "array",
+            "description": "Hook subscriptions. Names must exist in the framework event catalogue or be declared plugin events. Rule: hooks.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name",
+                    "type"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "type": {
+                        "enum": [
+                            "event",
+                            "filter",
+                            "validator",
+                            "decorator"
+                        ]
+                    },
+                    "priority": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "slots": {
+            "type": "array",
+            "description": "UI slot injections rendered through core components (no plugin-shipped views). Rule: slots.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "slot",
+                    "component"
+                ],
+                "properties": {
+                    "slot": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "component": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "permission": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                }
+            }
+        },
+        "settings": {
+            "type": "array",
+            "description": "Settings rendered as a generated admin form and read via Signals::setting(). Rule: settings.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "key",
+                    "type",
+                    "label"
+                ],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "type": {
+                        "enum": [
+                            "string",
+                            "integer",
+                            "boolean",
+                            "enum",
+                            "json"
+                        ]
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "options": {
+                        "type": "array",
+                        "description": "Required when type is enum.",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "encrypted": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "default": {},
+                    "rules": {
+                        "type": "array",
+                        "description": "Laravel validation rule strings applied on save.",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                },
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "enum"
+                        }
+                    },
+                    "required": [
+                        "type"
+                    ]
+                },
+                "then": {
+                    "required": [
+                        "key",
+                        "type",
+                        "label",
+                        "options"
+                    ]
+                }
+            }
+        },
+        "nav": {
+            "type": "object",
+            "description": "Top-level nav group (one per plugin) rendered in the app header, with a matching group sidebar on plugin pages. Rules: nav.malformed (group/icon/items shape), nav.items (item key/label/icon shape and uniqueness), nav.page_ref (each item's page must reference a declared pages[] key).",
+            "additionalProperties": false,
+            "required": [
+                "group",
+                "icon",
+                "items"
+            ],
+            "properties": {
+                "group": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Header nav group label (e.g. Field Ops)."
+                },
+                "icon": {
+                    "type": "string",
+                    "description": "Kebab-case flux icon name. Rule: nav.malformed.",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "key",
+                            "label",
+                            "page"
+                        ],
+                        "properties": {
+                            "key": {
+                                "type": "string",
+                                "description": "Item slug, unique within the plugin. Rule: nav.items.",
+                                "pattern": "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$"
+                            },
+                            "label": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "page": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "References a declared pages[] key. Rule: nav.page_ref."
+                            },
+                            "permission": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "icon": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "pages": {
+            "type": "array",
+            "description": "Config-driven UI pages rendered by core components only (no plugin-shipped views); section data comes from the runtime page() data provider. Rules: pages.malformed (key slug, title, layout), pages.sections (section types), pages.key_unique (unique page keys).",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "key",
+                    "title",
+                    "sections"
+                ],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Page slug used as the URL segment /plugins/{vendor}/{name}/{key}. Rule: pages.key_unique.",
+                        "pattern": "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "layout": {
+                        "description": "Page shell. Only the s-admin console shell in v1.",
+                        "enum": [
+                            "console"
+                        ],
+                        "default": "console"
+                    },
+                    "sections": {
+                        "type": "array",
+                        "minItems": 1,
+                        "description": "Ordered section list. Rule: pages.sections.",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "type"
+                            ],
+                            "properties": {
+                                "type": {
+                                    "enum": [
+                                        "stat-grid",
+                                        "table",
+                                        "html",
+                                        "datatable"
+                                    ]
+                                },
+                                "datatable": {
+                                    "type": "string",
+                                    "description": "Required when type is datatable: the declared datatables[] key rendered through the shared DataTable component.",
+                                    "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "network": {
+            "type": "array",
+            "description": "Outbound hosts the SDK HTTP client may call. Exact bare hostnames only \u2014 no wildcards, schemes, paths or ports; subdomains are not implied. Rule: network.wildcard.",
+            "items": {
+                "type": "string",
+                "pattern": "^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$",
+                "not": {
+                    "pattern": "[*/: ]"
+                }
+            }
+        },
+        "notifications": {
+            "type": "array",
+            "description": "Notification types the plugin may send via Signals::notify(). Keys must be vendor-prefixed like permissions (rule notifications.namespace). Channels may be core (database, mail, broadcast) or logical channels declared in channel_drivers[] (rule notifications.malformed).",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "key",
+                    "label"
+                ],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Vendor-prefixed type key (e.g. acme.sync.failed). Rule: notifications.namespace.",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "group": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "channels": {
+                        "type": "array",
+                        "minItems": 1,
+                        "description": "Core channels (database, mail, broadcast) and/or logical channels declared in this manifest's channel_drivers[]. Defaults to database + mail when omitted. Framework rule: notifications.malformed.",
+                        "items": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]*$"
+                        }
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "channel_drivers": {
+            "type": "array",
+            "description": "Notification channel drivers the plugin may register via PluginRegistrar::channelDriver(). Keys must be vendor-prefixed (rule channel_drivers.namespace). Shape: channel_drivers.malformed. Unique keys: channel_drivers.key_unique.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "key",
+                    "channel",
+                    "label"
+                ],
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Vendor-prefixed driver key (e.g. acme.slack_webhook). Rule: channel_drivers.namespace.",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                    },
+                    "channel": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Logical delivery channel slug (e.g. slack). Must not collide with core database/mail/broadcast. Rule: channel_drivers.malformed.",
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Human-readable label for settings UI."
+                    },
+                    "config_fields": {
+                        "type": "array",
+                        "minItems": 1,
+                        "description": "Optional declared config field keys for review (informational; runtime schema comes from ChannelDriver::configSchema()).",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                }
+            }
+        },
+        "events": {
+            "type": "array",
+            "description": "Plugin-owned EventRegistry names for event()/webhookEvent()/Signals::emit(). Names must be vendor-prefixed (rule events.namespace). Visibility declarations gate the corresponding registrar calls. Shape: events.malformed.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Vendor-prefixed dotted name (e.g. acme.sync.completed). Rule: events.namespace.",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+                    },
+                    "label": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "webhook": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "When true, webhookEvent() / event(..., webhook: true) may expose this name to outbound webhook subscriptions."
+                    },
+                    "workflow": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "When true, event(..., workflow: true) may expose this name to workflow and approval-chain event discovery."
+                    }
+                }
+            }
+        },
+        "workflow_handlers": {
+            "type": "array",
+            "description": "Declarative plugin workflow handlers. Metadata is validated before activation and class names are recorded only; no plugin code is resolved during manifest validation.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "class",
+                    "version",
+                    "contract_version",
+                    "capabilities",
+                    "retry",
+                    "outcomes",
+                    "output_schema",
+                    "sensitive_fields"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+                        "description": "Stable vendor-prefixed handler identity."
+                    },
+                    "class": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$",
+                        "description": "Fully-qualified handler class recorded for downstream registration."
+                    },
+                    "version": {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 1},
+                            {"type": "string", "minLength": 1}
+                        ]
+                    },
+                    "contract_version": {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 1},
+                            {"type": "string", "minLength": 1}
+                        ]
+                    },
+                    "capabilities": {
+                        "type": "array",
+                        "items": {"type": "string", "minLength": 1}
+                    },
+                    "retry": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["idempotent", "automatic_retry", "automatic_retry_safe"],
+                        "properties": {
+                            "idempotent": {"type": "boolean"},
+                            "automatic_retry": {"type": "boolean"},
+                            "automatic_retry_safe": {"type": "boolean"}
+                        }
+                    },
+                    "outcomes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["type"],
+                            "properties": {"type": {"type": "string", "minLength": 1}}
+                        }
+                    },
+                    "output_schema": {"type": "object"},
+                    "sensitive_fields": {
+                        "type": "array",
+                        "items": {"type": "string", "minLength": 1}
+                    },
+                    "input_schema": {"type": "object"},
+                    "configuration_schema": {"type": "object"}
+                }
+            }
+        },
+        "workflow_triggers": {
+            "type": "array",
+            "description": "Optional declarative plugin workflow trigger extensions. Classes are not resolved during manifest validation.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "class", "version", "contract_version", "capabilities"],
+                "properties": {
+                    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},
+                    "class": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$"},
+                    "version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "contract_version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                    "input_schema": {"type": "object"},
+                    "output_schema": {"type": "object"},
+                    "sensitive_fields": {"type": "array", "items": {"type": "string", "minLength": 1}}
+                }
+            }
+        },
+        "workflow_conditions": {
+            "type": "array",
+            "description": "Optional declarative plugin workflow conditions. Conditions receive only explicitly allowlisted sanitized context and are side-effect-free by contract; live queries and mutations are forbidden.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "class", "version", "contract_version", "capabilities", "context", "sanitized", "side_effect_free"],
+                "properties": {
+                    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},
+                    "class": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$"},
+                    "version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "contract_version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                    "context": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "string", "pattern": "^(trigger|subject|originator|workflow|steps|vars)\\.[a-zA-Z0-9_.-]+$"}
+                    },
+                    "sanitized": {"const": true},
+                    "side_effect_free": {"const": true},
+                    "queries": {"type": "array", "maxItems": 0},
+                    "mutations": {"type": "array", "maxItems": 0},
+                    "input_schema": {"type": "object"},
+                    "output_schema": {"type": "object"}
+                }
+            }
+        }
+    },
+    "$defs": {
+        "versionConstraint": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Composer-style constraint: *, ^1.2, ~1.2.0, >=1.0.0, <2, !=1.0.0, 1.2.*, 1.2.3, hyphen ranges (1.0.0 - 2.0.0), space-separated ANDs and ||-separated ORs."
+        }
+    }
+}

@@ -1,0 +1,183 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://docs.signals.rent/schemas/signals-plugin-registry-entry.v1.json",
+    "title": "Signals plugin registry entry",
+    "description": "One registry entry file, stored at plugins/<vendor>/<package>.json. An entry is a hand-maintained POINTER plus curation metadata: it says where a plugin lives, who wrote it, how it is licensed, and how far Signals has reviewed it. It deliberately carries no version or capability data — CI resolves the highest SemVer git tag in the entry's source repo, reads that tag's signals.yaml, validates it against the framework manifest schema (https://docs.signals.rent/schemas/signals-plugin-manifest.v1.json) and merges the result into index.json as a generated `latest` block. Beyond this schema, CI enforces: (a) the file path segments must equal the `package` field, so acme/booking-reminders lives at plugins/acme/booking-reminders.json; (b) `package` must be unique across the registry; (c) enrichment must succeed at least once for the entry to show version data in the index.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "package",
+        "source",
+        "description",
+        "tier"
+    ],
+    "properties": {
+        "package": {
+            "type": "string",
+            "description": "Composer package name in vendor/name form, identical to the `package` field of the plugin's signals.yaml. CI additionally enforces that this value matches the entry's own file path (plugins/<vendor>/<name>.json) and is unique across the registry; a mismatch between this value and the manifest found at the resolved tag fails enrichment for the entry.",
+            "pattern": "^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$"
+        },
+        "source": {
+            "type": "object",
+            "description": "Where the plugin's code lives. Installation is git-repository-plus-tag only: the framework clones or downloads the tagged release CI resolved, so the repository must be publicly readable over HTTPS and must publish SemVer git tags.",
+            "additionalProperties": false,
+            "required": [
+                "type",
+                "url"
+            ],
+            "properties": {
+                "type": {
+                    "description": "Install source kind. Only git repositories are supported in v1.",
+                    "enum": [
+                        "git"
+                    ]
+                },
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Public HTTPS clone URL of the plugin repository (e.g. https://github.com/acme/signals-booking-reminders.git). SSH and git:// URLs are rejected: CI clones anonymously and the framework must be able to fetch the same URL without credentials.",
+                    "pattern": "^https://[^\\s]+$",
+                    "minLength": 12,
+                    "maxLength": 2000
+                }
+            }
+        },
+        "description": {
+            "type": "string",
+            "description": "One-sentence summary of what the plugin does, shown in registry listings and search. Written by the entry author — the signals.yaml manifest has no description field, so this is the only source of it.",
+            "minLength": 1,
+            "maxLength": 500
+        },
+        "tier": {
+            "description": "Curation tier. `verified` means Signals reviewed a specific tagged release of this plugin (recorded in `verification`) and is required to carry a `verification` block. `community` means the plugin is listed but unreviewed: it is self-hosted only and installed entirely at the operator's own risk; community entries must not carry a `verification` block.",
+            "enum": [
+                "verified",
+                "community"
+            ]
+        },
+        "license": {
+            "type": "string",
+            "description": "SPDX licence identifier for the plugin's own code (e.g. MIT, Apache-2.0, GPL-3.0-or-later, or a proprietary marker such as LicenseRef-Acme-Commercial). Informational only: listing a plugin in this registry does not change or grant any licence.",
+            "minLength": 1,
+            "maxLength": 100
+        },
+        "authors": {
+            "type": "array",
+            "description": "People or organisations responsible for the plugin, for attribution and contact in listings.",
+            "maxItems": 20,
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Author or organisation name.",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Optional contact email address."
+                    },
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Optional author homepage or profile URL (https).",
+                        "pattern": "^https://[^\\s]+$"
+                    }
+                }
+            }
+        },
+        "homepage": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional HTTPS URL for the plugin's documentation or product page, linked from the registry UI. Omit when the source repository is the only home.",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2000
+        },
+        "keywords": {
+            "type": "array",
+            "description": "Optional kebab-case tags used for filtering and search in the registry UI (e.g. payments, accounting, field-service). Keep them short and conventional so similar plugins cluster together.",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+                "type": "string",
+                "description": "A single kebab-case keyword: lowercase letters and digits, hyphen-separated.",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 40
+            }
+        },
+        "status": {
+            "description": "Lifecycle state of the listing. Treated as \"active\" when absent. `deprecated` keeps the plugin installable but badges it as no longer recommended; `yanked` marks it as withdrawn — yanked entries deliberately stay in the index so consumers holding a cached copy still learn the status, and the registry UI hides them by default.",
+            "enum": [
+                "active",
+                "deprecated",
+                "yanked"
+            ]
+        },
+        "status_reason": {
+            "type": "string",
+            "description": "Short human-readable explanation shown alongside a deprecated or yanked badge (e.g. \"superseded by acme/payments-v2\", \"upstream API withdrawn\"). Ignored when status is active or absent.",
+            "minLength": 1,
+            "maxLength": 500
+        },
+        "verification": {
+            "type": "object",
+            "description": "Record of the Signals review that granted verified tier. Required when tier is \"verified\" and forbidden otherwise. Verification is anchored to one release: a later tag published by the plugin author is NOT automatically verified, so `latest.version` in the index may be ahead of `reviewed_version`. Consumers that require a reviewed build should compare the two.",
+            "additionalProperties": false,
+            "required": [
+                "reviewed_version",
+                "reviewed_at"
+            ],
+            "properties": {
+                "reviewed_version": {
+                    "type": "string",
+                    "description": "The exact plugin version Signals reviewed, matching the `version` field of the signals.yaml at the reviewed tag. Strict SemVer 2.0.0, as required by the manifest schema.",
+                    "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+                },
+                "reviewed_at": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Date the review completed, as YYYY-MM-DD.",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                }
+            }
+        },
+        "added_at": {
+            "type": "string",
+            "format": "date",
+            "description": "Date this entry was first accepted into the registry, as YYYY-MM-DD. Informational; used to sort \"recently added\" views.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "tier": {
+                        "const": "verified"
+                    }
+                },
+                "required": [
+                    "tier"
+                ]
+            },
+            "then": {
+                "required": [
+                    "verification"
+                ]
+            },
+            "else": {
+                "not": {
+                    "required": [
+                        "verification"
+                    ]
+                }
+            }
+        }
+    ]
+}

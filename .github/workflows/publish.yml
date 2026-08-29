@@ -1,0 +1,105 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      # Both are written back by this workflow; ignoring them stops the
+      # auto-commit from triggering another run.
+      - 'index.json'
+      - 'schemas/vendor/signals-plugin-manifest.v1.json'
+  schedule:
+    # Weekly refresh so plugin releases are picked up without a registry commit.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build index and Pages artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate every entry against the registry schema
+        run: npm run validate
+
+      - name: Refresh the pinned manifest schema
+        run: node scripts/refresh-vendor-schema.mjs
+
+      - name: Build the index with enrichment
+        run: npm run build
+
+      - name: Commit the refreshed index and schema
+        env:
+          VENDORED: schemas/vendor/signals-plugin-manifest.v1.json
+        run: |
+          if git diff --quiet -- index.json "$VENDORED"; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+
+          if git diff --quiet -- index.json; then
+            message='Update vendored manifest schema'
+          elif git diff --quiet -- "$VENDORED"; then
+            message='Update index.json'
+          else
+            message='Update index.json and vendored manifest schema'
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.json "$VENDORED"
+          git commit -m "$message"
+          git push
+
+      - name: Assemble the Pages artifact
+        run: |
+          rm -rf _site
+          mkdir -p _site/schemas/vendor
+          cp -R site/. _site/
+          cp index.json schema.json index.schema.json _site/
+          cp -R schemas/vendor/. _site/schemas/vendor/
+          ls -R _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
