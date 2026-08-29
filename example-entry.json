@@ -1,0 +1,25 @@
+{
+    "package": "acme/booking-reminders",
+    "source": {
+        "type": "git",
+        "url": "https://github.com/acme/signals-booking-reminders.git"
+    },
+    "description": "Sends configurable reminder notifications to hirers before collection and before a rental is due back.",
+    "tier": "community",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Acme Rentals Ltd",
+            "email": "plugins@example.com",
+            "url": "https://www.example.com"
+        }
+    ],
+    "homepage": "https://www.example.com/signals/booking-reminders",
+    "keywords": [
+        "notifications",
+        "reminders",
+        "bookings"
+    ],
+    "status": "active",
+    "added_at": "2026-08-01"
+}

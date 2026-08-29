@@ -1,0 +1,56 @@
+name: Validate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate registry
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate every entry against the registry schema
+        run: npm run validate
+
+      - name: List entry files changed by this pull request
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- 'plugins/**/*.json' > changed-entries.txt
+          echo "Changed entry files:"
+          cat changed-entries.txt
+          if [ -s changed-entries.txt ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deep check the changed entries against their source repositories
+        if: steps.changed.outputs.any == 'true'
+        run: xargs -r -a changed-entries.txt node scripts/check-entries.mjs
+
+      - name: Build the index offline as a smoke test
+        run: node scripts/build-index.mjs --offline --out "$RUNNER_TEMP/index.json"
