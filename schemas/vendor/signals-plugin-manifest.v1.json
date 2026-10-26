@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://signals.rent/schemas/signals-plugin-manifest.v1.json",
     "title": "Signals plugin manifest (signals.yaml)",
-    "description": "Public specification for the signals.yaml plugin manifest, version 1. This schema mirrors the framework's ManifestValidator; the framework additionally enforces cross-field rules a JSON Schema cannot express: permission keys must be prefixed with the Composer vendor segment of `package` (rule permissions.namespace), and every capability a plugin registers at runtime must be declared here (wiring \u2286 declaration). Validate locally with `php artisan signals:plugin check {package}`.",
+    "description": "Public specification for the signals.yaml plugin manifest, version 1. This schema mirrors the framework's ManifestValidator; the framework additionally enforces cross-field rules a JSON Schema cannot express: permission keys must be prefixed with the Composer vendor segment of `package` (rule permissions.namespace), and every capability a plugin registers at runtime must be declared here (wiring \u2286 declaration). Workflow activation diagnostics use compatibility.host, compatibility.requires, compatibility.conflicts, and workflow_extensions.identity_collision. Workflow declaration diagnostics use workflow_handlers.malformed, workflow_handlers.identity, workflow_handlers.version, workflow_handlers.contract_version, workflow_handlers.class, workflow_handlers.capabilities, workflow_handlers.retry, workflow_handlers.outcomes, workflow_handlers.schema, workflow_conditions.context, workflow_conditions.contract_version, workflow_conditions.sanitized, workflow_conditions.side_effect_free, workflow_conditions.no_live_access, and workflow_extensions.identity_unique. Validate locally with `php artisan signals:plugin check {package}`.",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -80,7 +80,7 @@
                     "entity": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "Entity key from the plugin entity map (e.g. members, opportunities, invoices, products)."
+                        "description": "Entity key from the plugin entity map (e.g. accounts, rentals, invoices, catalogue_items)."
                     },
                     "fields": {
                         "type": "array",
@@ -590,7 +590,7 @@
         },
         "events": {
             "type": "array",
-            "description": "Plugin-owned EventRegistry names for event()/webhookEvent()/Signals::emit(). Names must be vendor-prefixed (rule events.namespace). Shape: events.malformed.",
+            "description": "Plugin-owned EventRegistry names for event()/webhookEvent()/Signals::emit(). Names must be vendor-prefixed (rule events.namespace). Visibility declarations gate the corresponding registrar calls. Shape: events.malformed.",
             "items": {
                 "type": "object",
                 "additionalProperties": false,
@@ -612,7 +612,132 @@
                         "type": "boolean",
                         "default": false,
                         "description": "When true, webhookEvent() / event(..., webhook: true) may expose this name to outbound webhook subscriptions."
+                    },
+                    "workflow": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "When true, event(..., workflow: true) may expose this name to workflow and approval-chain event discovery."
                     }
+                }
+            }
+        },
+        "workflow_handlers": {
+            "type": "array",
+            "description": "Declarative plugin workflow handlers. Metadata is validated before activation and class names are recorded only; no plugin code is resolved during manifest validation.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "class",
+                    "version",
+                    "contract_version",
+                    "capabilities",
+                    "retry",
+                    "outcomes",
+                    "output_schema",
+                    "sensitive_fields"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+                        "description": "Stable vendor-prefixed handler identity."
+                    },
+                    "class": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$",
+                        "description": "Fully-qualified handler class recorded for downstream registration."
+                    },
+                    "version": {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 1},
+                            {"type": "string", "minLength": 1}
+                        ]
+                    },
+                    "contract_version": {
+                        "oneOf": [
+                            {"type": "integer", "minimum": 1},
+                            {"type": "string", "minLength": 1}
+                        ]
+                    },
+                    "capabilities": {
+                        "type": "array",
+                        "items": {"type": "string", "minLength": 1}
+                    },
+                    "retry": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["idempotent", "automatic_retry", "automatic_retry_safe"],
+                        "properties": {
+                            "idempotent": {"type": "boolean"},
+                            "automatic_retry": {"type": "boolean"},
+                            "automatic_retry_safe": {"type": "boolean"}
+                        }
+                    },
+                    "outcomes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["type"],
+                            "properties": {"type": {"type": "string", "minLength": 1}}
+                        }
+                    },
+                    "output_schema": {"type": "object"},
+                    "sensitive_fields": {
+                        "type": "array",
+                        "items": {"type": "string", "minLength": 1}
+                    },
+                    "input_schema": {"type": "object"},
+                    "configuration_schema": {"type": "object"}
+                }
+            }
+        },
+        "workflow_triggers": {
+            "type": "array",
+            "description": "Optional declarative plugin workflow trigger extensions. Classes are not resolved during manifest validation.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "class", "version", "contract_version", "capabilities"],
+                "properties": {
+                    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},
+                    "class": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$"},
+                    "version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "contract_version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                    "input_schema": {"type": "object"},
+                    "output_schema": {"type": "object"},
+                    "sensitive_fields": {"type": "array", "items": {"type": "string", "minLength": 1}}
+                }
+            }
+        },
+        "workflow_conditions": {
+            "type": "array",
+            "description": "Optional declarative plugin workflow conditions. Conditions receive only explicitly allowlisted sanitized context and are side-effect-free by contract; live queries and mutations are forbidden.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "class", "version", "contract_version", "capabilities", "context", "sanitized", "side_effect_free"],
+                "properties": {
+                    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},
+                    "class": {"type": "string", "pattern": "^[A-Z][A-Za-z0-9_]*(\\\\[A-Z][A-Za-z0-9_]*)+$"},
+                    "version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "contract_version": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1}]},
+                    "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                    "context": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "string", "pattern": "^(trigger|subject|originator|workflow|steps|vars)\\.[a-zA-Z0-9_.-]+$"}
+                    },
+                    "sanitized": {"const": true},
+                    "side_effect_free": {"const": true},
+                    "queries": {"type": "array", "maxItems": 0},
+                    "mutations": {"type": "array", "maxItems": 0},
+                    "input_schema": {"type": "object"},
+                    "output_schema": {"type": "object"}
                 }
             }
         }
